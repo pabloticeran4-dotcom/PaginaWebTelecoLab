@@ -1,0 +1,802 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Demodulador Binario Grupo 1</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: una sola columna guiada — controles arriba, resumen de bits, y el demodulador recorrido paso a paso */
+:root{
+  --bg:#f4f6f9; --panel:#ffffff; --panel2:#f8fafc; --ink:#14212b; --muted:#5f6c78; --line:#e2e7ee; --grid:#edf1f5;
+  --accent:#0f8a7a; --accent-ink:#ffffff; --accent-soft:#dff3ef;
+  --ok:#1d9a5b; --ok-soft:#e1f5ea; --bad:#d64545; --bad-soft:#fde8e8;
+  --c-sig:#0f8a7a; --c-perf:#2f5bd3; --c-imp:#d9822b; --c-noise:#8b46c4; --c-err:#d64545; --c-ref:#8a96a3; --c-alt:#c23a7d;
+  --band:rgba(15,138,122,.08); --band2:rgba(138,150,163,.12);
+  --shadow:0 1px 2px rgba(20,33,43,.05),0 4px 14px rgba(20,33,43,.05);
+  --f-body:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-display:"Plus Jakarta Sans",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1419; --panel:#151d24; --panel2:#1a242c; --ink:#e6edf2; --muted:#94a3af; --line:#26323c; --grid:#1f2a33;
+  --accent:#34c3ad; --accent-ink:#0b1714; --accent-soft:#143b35;
+  --ok:#48c98a; --ok-soft:#163a29; --bad:#ff7070; --bad-soft:#40201f;
+  --c-sig:#34c3ad; --c-perf:#7d9bff; --c-imp:#f2a650; --c-noise:#c48af0; --c-err:#ff7070; --c-ref:#7e8b96; --c-alt:#f07ab0;
+  --band:rgba(52,195,173,.09); --band2:rgba(148,163,175,.10); --shadow:none; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1419; --panel:#151d24; --panel2:#1a242c; --ink:#e6edf2; --muted:#94a3af; --line:#26323c; --grid:#1f2a33;
+  --accent:#34c3ad; --accent-ink:#0b1714; --accent-soft:#143b35;
+  --ok:#48c98a; --ok-soft:#163a29; --bad:#ff7070; --bad-soft:#40201f;
+  --c-sig:#34c3ad; --c-perf:#7d9bff; --c-imp:#f2a650; --c-noise:#c48af0; --c-err:#ff7070; --c-ref:#7e8b96; --c-alt:#f07ab0;
+  --band:rgba(52,195,173,.09); --band2:rgba(148,163,175,.10); --shadow:none; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14.5px;line-height:1.5}
+.wrap{max-width:1280px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+header.top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px}
+.eyebrow{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.04em}
+h1{font-size:clamp(22px,3vw,30px);font-weight:800;margin:2px 0 0;letter-spacing:-.02em;text-wrap:balance}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+
+/* controles */
+.controls{padding:16px 18px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 28px}
+@media (max-width:820px){.controls{grid-template-columns:minmax(0,1fr)}}
+.ctl{display:flex;flex-direction:column;gap:8px;min-width:0}
+.ctl-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.ctl-h label,.ctl-h span.l{font-weight:700;font-size:13.5px}
+.big{font-family:var(--f-mono);font-size:20px;font-weight:500;color:var(--accent)}
+.seg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:transparent;color:var(--ink);font:inherit;font-weight:600;font-size:13.5px;padding:8px 10px;border-radius:7px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+.seg button:not([aria-pressed=true]):hover{background:var(--accent-soft)}
+input[type=range]{width:100%;accent-color:var(--accent);height:22px}
+.presets{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.presets small{color:var(--muted);font-size:12px;margin-right:2px}
+.pre{font:inherit;font-size:12.5px;font-weight:600;padding:4px 11px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.pre[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.warn{font-size:12px;font-weight:600;color:var(--bad)}
+.actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-top:1px solid var(--line);padding-top:14px}
+.btn{font:inherit;font-weight:700;font-size:13.5px;padding:9px 14px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn:hover{filter:brightness(1.05)}
+details.adv{margin-left:auto}
+details.adv summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);list-style:none;padding:8px 4px}
+details.adv summary::-webkit-details-marker{display:none}
+details.adv summary::before{content:"⚙ "}
+details.adv[open]{flex-basis:100%;margin-left:0}
+.advgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 20px;padding:6px 4px 4px;font-size:13px}
+.advgrid label{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+.advgrid input[type=number]{width:80px;font-family:var(--f-mono);padding:5px 7px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink)}
+.hint{font-size:12px;color:var(--muted)}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* resumen */
+.result{padding:16px 18px;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px}
+@media (max-width:980px){.result{grid-template-columns:minmax(0,1fr)}}
+.result h2,.stage-h h2{font-size:17px;font-weight:800;margin:0 0 2px}
+.sub{font-size:13px;color:var(--muted);margin:0 0 12px}
+.strips{display:flex;flex-direction:column;gap:7px;overflow-x:auto;padding-bottom:2px}
+.strip{display:grid;grid-template-columns:150px auto 1fr;align-items:center;gap:10px;min-width:max-content}
+.strip .lab{font-size:12.5px;font-weight:600;line-height:1.25}
+.strip .lab small{display:block;font-weight:500;color:var(--muted)}
+.cells{display:flex;gap:4px}
+.cell{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;font-family:var(--f-mono);font-size:14px;font-weight:500;background:var(--panel2);border:1px solid var(--line);position:relative}
+button.cell{cursor:pointer;color:var(--ink)}
+button.cell.one{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.cell.ok{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+.cell.bad{background:var(--bad);border-color:var(--bad);color:#fff}
+.count{font-size:12.5px;font-weight:700;padding:3px 10px;border-radius:999px;justify-self:start;white-space:nowrap}
+@media (max-width:560px){.strip{grid-template-columns:96px auto;gap:6px}.strip .count{grid-column:2}.cell{width:25px;height:27px;font-size:13px}.cells{gap:3px}}
+.count.ok{background:var(--ok-soft);color:var(--ok)} .count.bad{background:var(--bad-soft);color:var(--bad)}
+.sep{height:1px;background:var(--line);margin:3px 0}
+.keys{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-content:start}
+.key{background:var(--panel2);border-radius:10px;padding:9px 12px;min-width:0}
+.key .k{font-size:12px;color:var(--muted);font-weight:600}
+.key .v{font-family:var(--f-mono);font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.key.wide{grid-column:1/-1}
+
+/* pasos */
+nav.steps{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px}
+.step{flex:1 0 132px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;font:inherit;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;color:var(--ink);position:relative}
+.step .n{font-size:11.5px;font-weight:700;color:var(--muted)}
+.step .t{font-weight:700;font-size:13.5px;line-height:1.2}
+.step[aria-selected=true]{border-color:var(--accent);background:var(--accent-soft)}
+.step[aria-selected=true] .n{color:var(--accent)}
+.stage{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.stage-h{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:flex-start}
+.stage-h p{margin:0;color:var(--muted);font-size:13.5px;max-width:72ch}
+.pn{border:1px solid var(--line);border-radius:12px;padding:12px 12px 8px;background:var(--panel)}
+.pn .ph{display:flex;flex-wrap:wrap;gap:4px 14px;justify-content:space-between;align-items:baseline}
+.pn h3{font-size:14px;font-weight:700;margin:0}
+.pn .eq{font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
+.pn .note{font-size:12.5px;color:var(--muted);margin:2px 0 6px;max-width:90ch}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);margin-bottom:2px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:18px;height:0;border-top:2.5px solid}
+.legend i.dash{border-top-style:dashed}
+.legend i.dot{width:9px;height:9px;border:0;border-radius:50%}
+.legend i.dia{width:8px;height:8px;border:0;transform:rotate(45deg)}
+.plot{position:relative;width:100%}
+.plot canvas{display:block;width:100%;touch-action:pan-y}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-family:var(--f-mono);font-size:11px;line-height:1.45;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.14);z-index:2}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:1000px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-family:var(--f-body);font-size:11.5px;font-weight:700;color:var(--muted);background:var(--panel2)}
+th:first-child,td:first-child{text-align:center}
+td.bad{color:var(--bad);font-weight:700}
+tr.grpH th{text-align:center;border-bottom:0}
+tbody tr:last-child td{border-bottom:0}
+.theory{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:1000px){.theory{grid-template-columns:minmax(0,1fr)}}
+.theory .card,.v-teo .card{padding:14px 16px;min-width:0;box-shadow:none}
+.card h3{font-size:15px;font-weight:700;margin:0 0 8px}
+.card p{max-width:68ch;margin:6px 0}
+.f{font-family:var(--f-mono);font-size:12.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin:6px 0;overflow-x:auto;white-space:pre;line-height:1.6}
+.diag{overflow-x:auto;margin-bottom:14px}
+.diag svg{display:block;min-width:620px;width:100%;height:auto}
+.foot{font-size:12px;color:var(--muted);text-align:center}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div>
+    <div class="eyebrow">Telecomunicaciones Digitales · Laboratorio de Simulación 2</div>
+    <h1>Demodulador binario coherente · Grupo 1</h1>
+  </div>
+  <div class="chips"><span class="chip">BPSK</span><span class="chip">FSK de Sunde</span><span class="chip">ε 7–12 %</span><span class="chip">γ<sub>b</sub> 14–20 dB</span></div>
+</header>
+
+<section class="card controls" aria-label="Controles">
+  <div class="ctl">
+    <div class="ctl-h"><span class="l">Modulación</span></div>
+    <div class="seg" id="modSeg"><button type="button" data-v="bpsk" aria-pressed="true">BPSK</button><button type="button" data-v="fsk" aria-pressed="false">FSK de Sunde</button></div>
+  </div>
+  <div class="ctl">
+    <div class="ctl-h"><span class="l">Filtro óptimo</span></div>
+    <div class="seg" id="filtSeg"><button type="button" data-v="mf" aria-pressed="false">Filtro adaptado</button><button type="button" data-v="cor" aria-pressed="true">Filtro correlador</button></div>
+  </div>
+  <div class="ctl">
+    <div class="ctl-h"><label for="eps">Error de sincronismo ε</label><span class="big" id="epsOut"></span></div>
+    <input type="range" id="eps" min="0" max="20" step="0.5" value="10">
+    <div class="presets" id="epsPre"><small>Grupo 1:</small><button class="pre" type="button" data-v="7">7 %</button><button class="pre" type="button" data-v="10">10 %</button><button class="pre" type="button" data-v="12">12 %</button><span class="warn" id="epsWarn" hidden>fuera del rango 7–12 %</span></div>
+  </div>
+  <div class="ctl">
+    <div class="ctl-h"><label for="gam">Relación señal a ruido γ<sub>b</sub></label><span class="big" id="gamOut"></span></div>
+    <input type="range" id="gam" min="0" max="25" step="0.5" value="17">
+    <div class="presets" id="gamPre"><small>Grupo 1:</small><button class="pre" type="button" data-v="14">14 dB</button><button class="pre" type="button" data-v="17">17 dB</button><button class="pre" type="button" data-v="20">20 dB</button><span class="warn" id="gamWarn" hidden>fuera del rango 14–20 dB</span></div>
+  </div>
+  <div class="actions">
+    <button class="btn" type="button" id="newBits">Nueva secuencia de bits</button>
+    <button class="btn ghost" type="button" id="newNoise">Nuevo ruido</button>
+    <details class="adv">
+      <summary>Opciones avanzadas</summary>
+      <div class="advgrid">
+        <div>
+          <div style="font-weight:700;margin-bottom:4px">Instante de muestreo imperfecto</div>
+          <label><input type="radio" name="model" value="lit" checked> <span>t<sub>k</sub> = (k+1)T<sub>b</sub>(1+ε)<br><span class="hint">Como dice la guía: el desfase crece con k</span></span></label>
+          <label style="margin-top:6px"><input type="radio" name="model" value="fix"> <span>t<sub>k</sub> = (k+1)T<sub>b</sub> + εT<sub>b</sub><br><span class="hint">Desfase fijo en cada bit</span></span></label>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <label for="ac" style="align-items:center">Amplitud A<sub>c</sub> <input type="number" id="ac" min="0.1" max="10" step="0.1" value="1"> V</label>
+          <label for="nc" style="align-items:center">Ciclos por bit N<sub>c</sub> <input type="number" id="nc" min="1" max="12" step="1" value="3"></label>
+          <span class="hint">f<sub>c</sub> = N<sub>c</sub>·f<sub>b</sub>. En FSK de Sunde: f<sub>1,0</sub> = f<sub>c</sub> ± f<sub>b</sub>/2.</span>
+          <span class="hint" id="seeds"></span>
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="card result" aria-label="Resultado">
+  <div style="min-width:0">
+    <h2 id="resTitle">Resultado de la demodulación</h2>
+    <p class="sub">Bits recibidos comparados con los transmitidos. En rojo, los bits con error. Toca un bit transmitido para cambiarlo.</p>
+    <div class="strips" id="strips"></div>
+  </div>
+  <div>
+    <h2>Datos clave</h2>
+    <p class="sub" id="keySub"></p>
+    <div class="keys" id="keys"></div>
+  </div>
+</section>
+
+<nav class="steps" role="tablist" aria-label="Etapas del demodulador">
+  <button class="step" role="tab" data-step="entrada"><span class="n">Paso 1</span><span class="t">Señal de entrada</span></button>
+  <button class="step" role="tab" data-step="filtro"><span class="n">Paso 2</span><span class="t">Filtro óptimo</span></button>
+  <button class="step" role="tab" data-step="muestreo"><span class="n">Paso 3</span><span class="t">Muestreo y comparador</span></button>
+  <button class="step" role="tab" data-step="ruido"><span class="n">Paso 4</span><span class="t">Con ruido</span></button>
+  <button class="step" role="tab" data-step="tabla"><span class="n">Valores</span><span class="t">Tabla de muestras</span></button>
+  <button class="step" role="tab" data-step="pb"><span class="n">Desempeño</span><span class="t">Curvas P<sub>b</sub></span></button>
+  <button class="step" role="tab" data-step="teoria"><span class="n">Teoría</span><span class="t">Fórmulas</span></button>
+</nav>
+
+<section class="card stage" id="stage">
+  <div class="stage-h"><div><h2 id="stTitle"></h2><p id="stDesc"></p></div></div>
+  <div id="st-entrada" class="st"></div>
+  <div id="st-filtro" class="st"></div>
+  <div id="st-muestreo" class="st"></div>
+  <div id="st-ruido" class="st"></div>
+  <div id="st-tabla" class="st"><div class="tblwrap"><table id="tbl"></table></div></div>
+  <div id="st-pb" class="st">
+    <div class="presets" style="margin-bottom:10px"><small>Escala mínima del eje:</small><button class="pre" type="button" data-y="-8">10⁻⁸</button><button class="pre" type="button" data-y="-12" aria-pressed="true">10⁻¹²</button><button class="pre" type="button" data-y="-20">10⁻²⁰</button><button class="pre" type="button" data-y="-40">10⁻⁴⁰</button></div>
+    <div class="grid2" id="pbPlots"></div>
+    <div class="tblwrap" style="margin-top:14px"><table id="pbTable"></table></div>
+  </div>
+  <div id="st-teoria" class="st v-teo"><div id="v-teoria"></div></div>
+</section>
+<p class="foot">Simulación normalizada: T<sub>b</sub> = 1, 200 muestras por bit. Pasa el cursor sobre una gráfica para leer sus valores.</p>
+</div>
+<script>
+const NS = 200;               // muestras por intervalo de bit Tb
+const DT = 1 / NS;
+const NBITS = 10;             // secuencia pedida por la guía
+const EXTRA = 4;              // bits de continuación del flujo (para muestrear tarde)
+const TWO_PI = 2 * Math.PI;
+const G1 = { eps: [7, 12], gam: [14, 20] };
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('g1demod:' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('g1demod:' + k, JSON.stringify(v)); } catch (e) {} }
+};
+
+const S = {
+  eps: 10, gam: 17, model: 'lit', filt: store.get('filt', 'cor'), Ac: 1, Nc: 3,
+  bitSeed: 20262, noiseSeed: 8526, bits: [], tab: 'bpsk', ymin: -12
+};
+
+/* ---------- Generadores aleatorios reproducibles ---------- */
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function gaussGen(rng) { let spare = null; return () => { if (spare !== null) { const s = spare; spare = null; return s; } let u = 0, v = 0; while (u === 0) u = rng(); v = rng(); const m = Math.sqrt(-2 * Math.log(u)); spare = m * Math.sin(TWO_PI * v); return m * Math.cos(TWO_PI * v); }; }
+
+/* ---------- Función Q(x) = ½·erfc(x/√2)  (aprox. Numerical Recipes, error relativo < 1.2e-7) ---------- */
+function erfc(x) { const z = Math.abs(x), t = 1 / (1 + 0.5 * z); const r = t * Math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (-0.18628806 + t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277))))))))); return x >= 0 ? r : 2 - r; }
+const Q = x => 0.5 * erfc(x / Math.SQRT2);
+
+function makeBits() { const r = mulberry32(S.bitSeed); S.bits = Array.from({ length: NBITS + EXTRA }, () => (r() < 0.5 ? 0 : 1)); }
+function stdNoise() { const g = gaussGen(mulberry32(S.noiseSeed)); return Array.from({ length: NBITS }, g); }
+
+/* ---------- Modelo de cada modulación ----------
+   BPSK: s1(t) = Ac·pD(t)·cos(wc t),  s0(t) = −s1(t)
+   FSK de Sunde: s1,0(t) = Ac·pD(t)·cos(2π(fc ± fd)t),  fd = fb/2
+   K se elige para reproducir la tabla de varianzas (sesión 13): σ² = Ac²/(2γb)        */
+function modModel(mod) {
+  const Ac = S.Ac, Nc = S.Nc;
+  if (mod === 'bpsk') {
+    const K = 1 / Ac;
+    return {
+      name: 'BPSK', K, Ac, Nc,
+      s: (m, tau) => (m ? 1 : -1) * Ac * Math.cos(TWO_PI * Nc * tau),
+      E1: Ac * Ac / 2, E0: Ac * Ac / 2, E10: -Ac * Ac / 2, Eb: Ac * Ac / 2,
+      pbPerfect: g => Q(Math.sqrt(2 * g)), pbExpr: 'Q(√(2γb))'
+    };
+  }
+  const K = Math.SQRT2 / Ac;
+  return {
+    name: 'FSK de Sunde', K, Ac, Nc,
+    s: (m, tau) => Ac * Math.cos(TWO_PI * (Nc + (m ? 0.5 : -0.5)) * tau),
+    E1: Ac * Ac / 2, E0: Ac * Ac / 2, E10: 0, Eb: Ac * Ac / 2,
+    pbPerfect: g => Q(Math.sqrt(g)), pbExpr: 'Q(√γb)'
+  };
+}
+
+/* Instante de muestreo imperfecto según el modelo elegido */
+function tImp(k, eps) { return S.model === 'lit' ? (k + 1) * (1 + eps) : (k + 1) + eps; }
+
+/* ---------- Simulación completa del demodulador ---------- */
+function simulate(mod) {
+  const M = modModel(mod), K = M.K, s = M.s, bits = S.bits, L = bits.length, N = L * NS;
+  const eps = S.eps / 100, gamma = Math.pow(10, S.gam / 10);
+  const sigma2 = (S.Ac * S.Ac) / (2 * gamma), sigma = Math.sqrt(sigma2);
+  const z1 = K * (M.E1 - M.E10), z0 = K * (M.E10 - M.E0), Vopt = K / 2 * (M.E1 - M.E0);
+
+  // Señal recibida: suma de sm(t − kTb)  (cada bit en su tiempo local τ = t − kTb)
+  const t = new Float64Array(N + 1), r = new Float64Array(N + 1);
+  const rAt = tt => { const k = Math.floor(tt + 1e-12); if (k < 0 || k >= L) return 0; return s(bits[k], tt - k); };
+  for (let n = 0; n <= N; n++) { t[n] = n * DT; const k = Math.floor(n / NS); r[n] = k < L ? s(bits[k], (n - k * NS) * DT) : 0; }
+
+  // (1) FILTRO ADAPTADO: h1(t) = K·s1(Tb − t), h0(t) = K·s0(Tb − t);  zmi(t) = sm(t) * hi(t)
+  const h1 = new Float64Array(NS + 1), h0 = new Float64Array(NS + 1);
+  for (let j = 0; j <= NS; j++) { h1[j] = K * s(1, 1 - j * DT); h0[j] = K * s(0, 1 - j * DT); }
+  const mf1 = new Float64Array(N + 1), mf0 = new Float64Array(N + 1), mf = new Float64Array(N + 1);
+  for (let n = 0; n <= N; n++) {
+    let a = 0, b = 0;
+    for (let j = 1; j <= NS; j++) { const i = n - j; if (i < 0) break; a += r[i] * h1[j]; b += r[i] * h0[j]; }
+    mf1[n] = a * DT; mf0[n] = b * DT; mf[n] = mf1[n] - mf0[n];
+  }
+  const interp = (arr, tt) => { const x = tt * NS; const i = Math.floor(x); if (i < 0) return arr[0]; if (i >= N) return arr[N]; const f = x - i; return arr[i] * (1 - f) + arr[i + 1] * f; };
+
+  // (2) CORRELADOR (sincronismo perfecto): zmi(t) = ∫_{kTb}^{t} sm(τ−kTb)·K·si(τ−kTb) dτ, reset en kTb
+  const cor = { x: [], z1: [], z0: [], z: [], p1: [], p0: [] }; const corEnd = [];
+  for (let k = 0; k < L; k++) {
+    let a = 0, b = 0;
+    for (let j = 0; j <= NS; j++) {
+      const n = k * NS + j, tau = j * DT;
+      if (j > 0) { const i = n - 1, ti = (j - 1) * DT; a += r[i] * K * s(1, ti) * DT; b += r[i] * K * s(0, ti) * DT; }
+      cor.x.push(k + tau); cor.z1.push(a); cor.z0.push(b); cor.z.push(a - b);
+    }
+    cor.x.push(k + 1); cor.z1.push(NaN); cor.z0.push(NaN); cor.z.push(NaN);
+    corEnd.push(a - b);
+  }
+  // productos internos del correlador: sm(t)·K·s1(t−kTb) y sm(t)·K·s0(t−kTb)
+  const prod1 = new Float64Array(N + 1), prod0 = new Float64Array(N + 1);
+  for (let n = 0; n <= N; n++) { const k = Math.min(L - 1, Math.floor(n / NS)); const tau = n * DT - k; prod1[n] = r[n] * K * s(1, tau); prod0[n] = r[n] * K * s(0, tau); }
+
+  // (3) CORRELADOR con sincronismo imperfecto: reset y volcado gobernados por el mismo reloj de bit desfasado
+  //     ventana [t_{k−1}, t_k], referencia local K·si(τ − kTb) (sincronismo de portadora ideal)
+  const corI = { x: [], z: [] }; const corImpEnd = [];
+  for (let k = 0; k < NBITS; k++) {
+    const a = tImp(k - 1, eps), b = tImp(k, eps);
+    const Mst = Math.max(1, Math.round((b - a) * NS)), h = (b - a) / Mst;
+    let acc = 0; corI.x.push(a); corI.z.push(0);
+    for (let j = 0; j < Mst; j++) { const tm = a + (j + 0.5) * h; acc += rAt(tm) * K * (s(1, tm - k) - s(0, tm - k)) * h; corI.x.push(a + (j + 1) * h); corI.z.push(acc); }
+    corI.x.push(b); corI.z.push(NaN);
+    corImpEnd.push(acc);
+  }
+
+  // Muestreo S/H
+  const g = stdNoise();
+  const rows = [];
+  for (let k = 0; k < NBITS; k++) {
+    const tp = k + 1, ti = tImp(k, eps);
+    const zP_mf = interp(mf, tp), zP_cor = corEnd[k];
+    const zI_mf = interp(mf, ti), zI_cor = corImpEnd[k];
+    const n = sigma * g[k];
+    rows.push({ k, m: bits[k], tp, ti, zP_mf, zP_cor, zI_mf, zI_cor, n });
+  }
+  const tEnd = Math.ceil((Math.max(NBITS, tImp(NBITS - 1, eps)) + 0.6) * 2) / 2;
+  return { mod, M, eps, gamma, sigma2, sigma, z1, z0, Vopt, t, r, mf1, mf0, mf, h1, h0, cor, corI, prod1, prod0, rows, tEnd, N };
+}
+
+/* ---------- Pb con desfase δ: promedio sobre los 4 patrones (bit k, bit k+1) ---------- */
+function patternZ(M, filt, d, bk, bk1) {
+  const K = M.K, s = M.s, steps = 600, h = 1 / steps; let acc = 0;
+  for (let j = 0; j < steps; j++) {
+    const tau = d + (j + 0.5) * h;
+    const rv = tau < 1 ? s(bk, tau) : s(bk1, tau - 1);
+    const ref = filt === 'mf' ? (s(1, tau - d) - s(0, tau - d)) : (s(1, tau) - s(0, tau));
+    acc += rv * K * ref * h;
+  }
+  return acc;
+}
+function pbCurves(mod, eps) {
+  const M = modModel(mod);
+  const pats = [[0, 0], [0, 1], [1, 0], [1, 1]];
+  const zz = { perf: pats.map(p => patternZ(M, 'cor', 0, p[0], p[1])), mf: pats.map(p => patternZ(M, 'mf', eps, p[0], p[1])), cor: pats.map(p => patternZ(M, 'cor', eps, p[0], p[1])) };
+  const pe = (z, b, sg) => b ? Q(z / sg) : Q(-z / sg);    // Vopt = 0
+  const pb = (key, g) => { const sg = S.Ac / Math.sqrt(2 * g); let sum = 0; pats.forEach((p, i) => sum += pe(zz[key][i], p[0], sg)); return sum / 4; };
+  return { M, zz, pb, pats };
+}
+function monteCarlo(C, key, gdb, nbits, seed) {
+  const rng = mulberry32(seed), gn = gaussGen(mulberry32(seed + 1));
+  const sg = S.Ac / Math.sqrt(2 * Math.pow(10, gdb / 10)); let err = 0;
+  for (let i = 0; i < nbits; i++) { const pi = (rng() * 4) | 0; const y = C.zz[key][pi] + sg * gn(); const dec = y > 0 ? 1 : 0; if (dec !== C.pats[pi][0]) err++; }
+  return err / nbits;
+}
+
+/* =====================================================================
+   Motor de gráficas en canvas (sin dependencias)
+   ===================================================================== */
+const tok = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function niceStep(range, target) { const raw = range / target, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
+const fmt = (v, d = 3) => { if (!isFinite(v)) return '—'; if (v === 0) return '0'; const a = Math.abs(v); if (a < 1e-3 || a >= 1e5) return v.toExponential(2); return (+v.toFixed(d)).toString(); };
+
+class Plot {
+  constructor(el, h) {
+    this.el = el; el.classList.add('plot'); this.h = h || 160;
+    this.cv = document.createElement('canvas'); this.cv.style.height = this.h + 'px';
+    this.tip = document.createElement('div'); this.tip.className = 'tip'; this.tip.hidden = true;
+    el.append(this.cv, this.tip); this.hx = null;
+    new ResizeObserver(() => this.spec && this.draw()).observe(el);
+    this.cv.addEventListener('pointermove', e => this.hover(e));
+    this.cv.addEventListener('pointerleave', () => { this.hx = null; this.tip.hidden = true; this.draw(); });
+  }
+  set(spec) { this.spec = spec; this.draw(); }
+  geom() { const w = this.el.clientWidth; return { w, h: this.h, L: 58, R: 12, T: 8, B: 24 }; }
+  draw() {
+    const sp = this.spec; if (!sp) return;
+    const G = this.geom(), dpr = window.devicePixelRatio || 1;
+    this.cv.width = Math.round(G.w * dpr); this.cv.height = Math.round(G.h * dpr);
+    const c = this.cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, G.w, G.h);
+    const pw = G.w - G.L - G.R, ph = G.h - G.T - G.B;
+    let [x0, x1] = sp.x;
+    let ylo, yhi;
+    const log = !!sp.log;
+    if (sp.y) { [ylo, yhi] = sp.y; }
+    else {
+      ylo = Infinity; yhi = -Infinity;
+      for (const se of sp.series) { for (let i = 0; i < se.y.length; i++) { const xv = se.x[i], yv = se.y[i]; if (!isFinite(yv) || xv < x0 || xv > x1) continue; if (yv < ylo) ylo = yv; if (yv > yhi) yhi = yv; } }
+      (sp.hlines || []).forEach(hl => { ylo = Math.min(ylo, hl.y); yhi = Math.max(yhi, hl.y); });
+      if (!isFinite(ylo)) { ylo = -1; yhi = 1; }
+      if (yhi - ylo < 1e-9) { ylo -= 1; yhi += 1; }
+      const pad = (yhi - ylo) * 0.1; ylo -= pad; yhi += pad;
+    }
+    const X = v => G.L + (v - x0) / (x1 - x0) * pw;
+    const ly = v => log ? Math.log10(Math.max(v, 1e-300)) : v;
+    const Y = v => G.T + (1 - (ly(v) - ly(ylo)) / (ly(yhi) - ly(ylo))) * ph;
+    this.map = { X, Y, x0, x1, G, pw, ph };
+    const ink = tok('--ink'), muted = tok('--muted'), grid = tok('--grid'), line = tok('--line');
+    c.font = '10.5px ' + tok('--f-mono');
+    // franjas
+    (sp.bands || []).forEach(b => { c.fillStyle = tok(b.color); const a = X(Math.max(b.x0, x0)), z = X(Math.min(b.x1, x1)); if (z > a) c.fillRect(a, G.T, z - a, ph); if (b.label) { c.fillStyle = muted; c.textAlign = 'left'; c.textBaseline = 'bottom'; c.fillText(b.label, a + 4, G.T + ph - 3); } });
+    // rejilla X
+    c.lineWidth = 1; c.textAlign = 'center'; c.textBaseline = 'top';
+    const xs = sp.xstep || niceStep(x1 - x0, Math.max(3, pw / 70));
+    for (let v = Math.ceil(x0 / xs) * xs; v <= x1 + 1e-9; v += xs) { const px = Math.round(X(v)) + .5; c.strokeStyle = grid; c.beginPath(); c.moveTo(px, G.T); c.lineTo(px, G.T + ph); c.stroke(); c.fillStyle = muted; c.fillText(fmt(v, 2), px, G.T + ph + 5); }
+    // rejilla Y
+    c.textAlign = 'right'; c.textBaseline = 'middle';
+    if (log) {
+      const a = Math.ceil(Math.log10(ylo)), b = Math.floor(Math.log10(yhi)); const st = Math.max(1, Math.ceil((b - a) / Math.max(2, ph / 26)));
+      for (let e = b; e >= a; e -= st) { const py = Math.round(Y(Math.pow(10, e))) + .5; c.strokeStyle = grid; c.beginPath(); c.moveTo(G.L, py); c.lineTo(G.L + pw, py); c.stroke(); c.fillStyle = muted; c.fillText('1e' + e, G.L - 6, py); }
+    } else {
+      const ys = sp.ystep || niceStep(yhi - ylo, Math.max(2, ph / 34));
+      for (let v = Math.ceil(ylo / ys) * ys; v <= yhi + 1e-9; v += ys) { const py = Math.round(Y(v)) + .5; c.strokeStyle = Math.abs(v) < 1e-9 ? line : grid; c.beginPath(); c.moveTo(G.L, py); c.lineTo(G.L + pw, py); c.stroke(); c.fillStyle = muted; c.fillText(fmt(v, 2), G.L - 6, py); }
+    }
+    // marco
+    c.strokeStyle = line; c.strokeRect(G.L + .5, G.T + .5, pw, ph);
+    // etiquetas de ejes
+    c.fillStyle = muted; c.textAlign = 'right'; c.textBaseline = 'top';
+    if (sp.xlabel) c.fillText(sp.xlabel, G.L + pw - 4, G.T + 3);
+    if (sp.ylabel) { c.save(); c.translate(11, G.T + ph / 2); c.rotate(-Math.PI / 2); c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(sp.ylabel, 0, 0); c.restore(); }
+    // clip
+    c.save(); c.beginPath(); c.rect(G.L, G.T, pw, ph); c.clip();
+    (sp.hlines || []).forEach(hl => { const py = Y(hl.y); c.strokeStyle = tok(hl.color || '--c-ref'); c.setLineDash([5, 4]); c.lineWidth = 1.2; c.beginPath(); c.moveTo(G.L, py); c.lineTo(G.L + pw, py); c.stroke(); c.setLineDash([]); if (hl.label) { c.fillStyle = tok(hl.color || '--c-ref'); c.textAlign = 'left'; c.textBaseline = 'bottom'; c.fillText(hl.label, G.L + 4, py - 2); } });
+    (sp.vlines || []).forEach(vl => { const px = X(vl.x); c.strokeStyle = tok(vl.color || '--c-ref'); c.setLineDash(vl.dash || [2, 3]); c.lineWidth = 1; c.beginPath(); c.moveTo(px, G.T); c.lineTo(px, G.T + ph); c.stroke(); c.setLineDash([]); });
+    for (const se of sp.series) {
+      const col = tok(se.color);
+      if (!se.markersOnly) {
+        c.strokeStyle = col; c.lineWidth = se.width || 1.5; c.setLineDash(se.dash || []); c.globalAlpha = se.alpha || 1;
+        c.beginPath(); let pen = false;
+        for (let i = 0; i < se.x.length; i++) { const yv = se.y[i]; if (!isFinite(yv) || (log && yv <= 0)) { pen = false; continue; } const px = X(se.x[i]), py = Y(yv); if (!pen) { c.moveTo(px, py); pen = true; } else c.lineTo(px, py); }
+        c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+      }
+      if (se.marker) {
+        c.fillStyle = col; c.strokeStyle = col; const ms = se.msize || 4;
+        for (let i = 0; i < se.x.length; i++) { const yv = se.y[i]; if (!isFinite(yv) || (log && yv <= 0)) continue; const px = X(se.x[i]), py = Y(yv); c.beginPath();
+          if (se.marker === 'circle') { c.arc(px, py, ms, 0, TWO_PI); c.fill(); }
+          else if (se.marker === 'ring') { c.lineWidth = 1.6; c.arc(px, py, ms, 0, TWO_PI); c.stroke(); }
+          else if (se.marker === 'diamond') { c.moveTo(px, py - ms - 1); c.lineTo(px + ms + 1, py); c.lineTo(px, py + ms + 1); c.lineTo(px - ms - 1, py); c.closePath(); c.fill(); }
+          else if (se.marker === 'x') { c.lineWidth = 2.2; c.moveTo(px - ms, py - ms); c.lineTo(px + ms, py + ms); c.moveTo(px + ms, py - ms); c.lineTo(px - ms, py + ms); c.stroke(); }
+          else if (se.marker === 'square') { c.fillRect(px - ms, py - ms, 2 * ms, 2 * ms); }
+        }
+      }
+    }
+    (sp.texts || []).forEach(tx => { c.fillStyle = tok(tx.color || '--muted'); c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = (tx.size || 11) + 'px ' + tok('--f-mono'); c.fillText(tx.text, X(tx.x), tx.yPx != null ? G.T + tx.yPx : Y(tx.y)); });
+    if (this.hx != null) { c.strokeStyle = ink; c.globalAlpha = .35; c.beginPath(); c.moveTo(this.hx + .5, G.T); c.lineTo(this.hx + .5, G.T + ph); c.stroke(); c.globalAlpha = 1; }
+    c.restore();
+  }
+  hover(e) {
+    if (!this.map || !this.spec) return;
+    const rc = this.cv.getBoundingClientRect(), px = e.clientX - rc.left, py = e.clientY - rc.top; const { G, pw, x0, x1 } = this.map;
+    if (px < G.L || px > G.L + pw) { this.hx = null; this.tip.hidden = true; this.draw(); return; }
+    this.hx = px; const xv = x0 + (px - G.L) / pw * (x1 - x0);
+    const lines = [`<b>${this.spec.xname || 't'} = ${fmt(xv, 3)}${this.spec.xunit || ' Tb'}</b>`];
+    for (const se of this.spec.series) {
+      if (!se.label || se.noTip) continue;
+      let lo = 0, hi = se.x.length - 1; if (hi < 0) continue;
+      while (hi - lo > 1) { const m = (lo + hi) >> 1; if (se.x[m] < xv) lo = m; else hi = m; }
+      let i = Math.abs(se.x[lo] - xv) <= Math.abs(se.x[hi] - xv) ? lo : hi;
+      if (se.markersOnly && Math.abs(se.x[i] - xv) > (x1 - x0) * 0.03) continue;
+      let v = se.y[i]; if (!isFinite(v)) { v = se.y[i === lo ? hi : lo]; } if (!isFinite(v)) continue;
+      lines.push(`<span style="color:${tok(se.color)}">■</span> ${se.label}: ${this.spec.log ? v.toExponential(2) : fmt(v, 4)}`);
+    }
+    this.tip.innerHTML = lines.join('<br>'); this.tip.hidden = false;
+    const tw = this.tip.offsetWidth; let left = px + 12; if (left + tw > G.w - 4) left = px - tw - 12;
+    this.tip.style.left = Math.max(0, left) + 'px'; this.tip.style.top = Math.max(0, Math.min(py - 10, this.h - this.tip.offsetHeight)) + 'px';
+    this.draw();
+  }
+}
+
+/* ---------- Constructor de paneles ---------- */
+function panel(parent, num, title, eq, h) {
+  const d = document.createElement('div'); d.className = 'pn';
+  d.innerHTML = `<div class="ph"><h3>${num ? `<span class="n">${num}</span>` : ''}${title}</h3><span class="eq">${eq || ''}</span></div><div class="legend"></div><div class="pl"></div>`;
+  parent.appendChild(d);
+  const p = new Plot(d.querySelector('.pl'), h);
+  const lg = d.querySelector('.legend');
+  return { set(spec) { p.set(spec); lg.innerHTML = spec.series.filter(s => s.label && !s.noLegend).map(s => { const cls = s.marker && s.markersOnly ? (s.marker === 'diamond' ? 'dia' : 'dot') : (s.dash ? 'dash' : ''); const st = cls === 'dot' || cls === 'dia' ? `background:${tok(s.color)}` : `border-color:${tok(s.color)}`; return `<span><i class="${cls}" style="${st}"></i>${s.label}</span>`; }).join(''); }, redraw() { p.draw(); }, el: d };
+}
+
+/* ---------- Ayudantes para series escalonadas ---------- */
+function stairs(ts, vals, tEnd) { const x = [], y = []; for (let i = 0; i < ts.length; i++) { const a = ts[i], b = i + 1 < ts.length ? ts[i + 1] : Math.min(a + 1, tEnd); x.push(a, b); y.push(vals[i], vals[i]); } return { x, y }; }
+function bitWave(bits, shift = 0) { const x = [], y = []; bits.forEach((b, k) => { x.push(k + shift, k + 1 + shift); y.push(b, b); }); return { x, y }; }
+function sampleArr(arr, x0, x1) { const x = [], y = []; const a = Math.max(0, Math.floor(x0 * NS)), b = Math.min(arr.length - 1, Math.ceil(x1 * NS)); for (let n = a; n <= b; n++) { x.push(n / NS); y.push(arr[n]); } return { x, y }; }
+function renderTheory() {
+  const el = document.getElementById('v-teoria');
+  if (el.dataset.done) return; el.dataset.done = '1';
+  el.innerHTML = `
+  
+  <div class="card diag"><h3>Demodulador coherente binario</h3>
+  <svg viewBox="0 0 760 170" role="img" aria-label="Diagrama de bloques: modulador, canal AWGN, filtro óptimo, S/H y comparador">
+   <g font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--ink)" stroke="var(--ink)">
+    <rect x="10" y="60" width="80" height="44" rx="4" fill="var(--panel)"/><text x="50" y="86" text-anchor="middle" stroke="none">MOD</text>
+    <circle cx="150" cy="82" r="14" fill="var(--panel)"/><text x="150" y="87" text-anchor="middle" stroke="none">+</text>
+    <text x="150" y="40" text-anchor="middle" stroke="none" fill="var(--muted)">n(t), η/2</text><line x1="150" y1="46" x2="150" y2="68"/>
+    <rect x="205" y="40" width="150" height="38" rx="4" fill="var(--panel)"/><text x="280" y="63" text-anchor="middle" stroke="none">h₁, h₀ adaptado</text>
+    <rect x="205" y="88" width="150" height="38" rx="4" fill="var(--panel)"/><text x="280" y="111" text-anchor="middle" stroke="none">∫ · K sᵢ  correlador</text>
+    <rect x="400" y="60" width="70" height="44" rx="4" fill="var(--panel)"/><text x="435" y="86" text-anchor="middle" stroke="none">S/H</text>
+    <rect x="515" y="60" width="90" height="44" rx="4" fill="var(--panel)"/><text x="560" y="80" text-anchor="middle" stroke="none">y ≷ V_opt</text><text x="560" y="96" text-anchor="middle" stroke="none" fill="var(--muted)">comparador</text>
+    <line x1="90" y1="82" x2="136" y2="82"/><line x1="164" y1="82" x2="190" y2="82"/><line x1="190" y1="59" x2="190" y2="107"/><line x1="190" y1="59" x2="205" y2="59"/><line x1="190" y1="107" x2="205" y2="107"/>
+    <line x1="355" y1="59" x2="380" y2="59"/><line x1="355" y1="107" x2="380" y2="107"/><line x1="380" y1="59" x2="380" y2="107"/><line x1="380" y1="82" x2="400" y2="82"/>
+    <line x1="470" y1="82" x2="515" y2="82"/><line x1="605" y1="82" x2="650" y2="82"/><text x="690" y="87" text-anchor="middle" stroke="none">m̂</text>
+    <text x="113" y="76" text-anchor="middle" stroke="none" fill="var(--muted)" font-size="11">sₘ(t−kTb)</text>
+    <text x="492" y="76" text-anchor="middle" stroke="none" fill="var(--muted)" font-size="11">zₘ+n</text>
+    <line x1="435" y1="104" x2="435" y2="140" stroke-dasharray="3 3"/><text x="435" y="156" text-anchor="middle" stroke="none" fill="var(--muted)" font-size="11">sincronismo de bit: t_k</text>
+   </g></svg></div>
+  <div class="theory">
+   <div class="card"><h3>Filtro óptimo · dos versiones</h3>
+    <p>La muestra a la salida del filtro es z<sub>m</sub> = ∫<sub>0</sub><sup>Tb</sup> s<sub>m</sub>(λ)·h(T<sub>b</sub> − λ) dλ. La desigualdad de Schwarz da el filtro que maximiza (z<sub>1</sub> − z<sub>0</sub>)/2σ:</p>
+    <div class="f">h_opt(t) = K[s1(Tb − t) − s0(Tb − t)] = h1(t) − h0(t)
+
+Adaptado:    zmi(t) = sm(t) * hi(t),   hi(t) = K·si(Tb − t)
+Correlador:  zmi(tk) = ∫[kTb,(k+1)Tb] sm(t−kTb)·K·si(t−kTb) dt
+             zm = zm1(tk) − zm0(tk)</div>
+    <p>Con sincronismo perfecto ambas versiones dan la misma muestra en t<sub>k</sub> = (k+1)T<sub>b</sub>, aunque sus formas de onda son distintas. El correlador es más robusto ante errores del reloj de bit.</p></div>
+   <div class="card"><h3>Expresión general de P<sub>e</sub></h3>
+    <div class="f">E1 = ∫ s1² dt,  E0 = ∫ s0² dt,  E10 = ∫ s1·s0 dt
+Eb = (E1 + E0)/2
+z1 = K(E1 − E10),  z0 = K(E10 − E0)
+V_opt = (z1 + z0)/2 = K(E1 − E0)/2
+Pe = Q((z1 − z0)/2σ) = Q(√((Eb − E10)/η))</div></div>
+   <div class="card"><h3>BPSK</h3>
+    <div class="f">s1(t) = Ac·pD(t)·cos(ωc t),  s0(t) = −s1(t),  fc = Nc·fb
+E1 = E0 = Ac²Tb/2,   E10 = −Eb,   Eb = Ac²Tb/2
+V_opt = 0
+Pb = Q(√(2γb)),   γb = Eb/η
+σ² = Ac²/(2γb)    (tabla sesión 13)
+K = 1/Ac  →  z1 = +Ac,  z0 = −Ac   (Tb = 1)</div></div>
+   <div class="card"><h3>FSK de Sunde</h3>
+    <div class="f">s1,0(t) = Ac·pD(t)·cos[2π(fc ± fd)t],  fd = fb/2
+E1 = E0 = Ac²Tb/2,   E10 = 0  (señales ortogonales)
+V_opt = 0
+Pb = Q(√γb)
+σ² = Ac²/(2γb)    (tabla sesión 13)
+K = √2/Ac  →  z1 = +Ac/√2,  z0 = −Ac/√2</div>
+    <p>FSK necesita 3 dB más de γ<sub>b</sub> que BPSK para la misma P<sub>b</sub>, porque la distancia z<sub>1</sub> − z<sub>0</sub> es √2 veces menor para el mismo σ.</p></div>
+   <div class="card"><h3>Ruido en el instante de muestreo</h3>
+    <p>Se generan muestras gaussianas n<sub>k</sub> ~ N(0, σ²) solo en los instantes t<sub>k</sub> y se suman a la muestra: <b>y = z<sub>m</sub> + n</b>. El valor de K se escogió para que la varianza del ruido filtrado sea exactamente la de la tabla de la sesión 13, σ² = E<sub>s</sub>f<sub>s</sub>/γ<sub>b</sub>, con lo que la simulación reproduce la P<sub>b</sub> teórica.</p>
+    <div class="f">σ² = (η/2)·K²·∫(s1 − s0)² dt
+γb = 10^(γb[dB]/10)</div>
+    <p>Las mismas muestras normalizadas se usan en todas las variantes, de modo que la comparación entre filtros y sincronismos es justa. “Nuevo ruido” cambia la realización.</p></div>
+   <div class="card"><h3>Sincronismo imperfecto</h3>
+    <p>Se desplaza el reloj de bit que gobierna el S/H (y el reset del integrador del correlador), manteniendo ideal el sincronismo de portadora.</p>
+    <div class="f">Guía:       tk = (k+1)·Tb·(1+ε)    desfase creciente ε(k+1)Tb
+Alternativa: tk = (k+1)·Tb + ε·Tb   desfase fijo
+
+Correlador: ventana [t(k−1), t(k)]  → la energía útil cae a ≈ (1 − 2ε)
+            cuando el bit siguiente es distinto
+Adaptado:   la salida oscila a fc → factor ≈ cos(2π·Nc·ε)</div>
+    <p>En las curvas P<sub>b</sub> imperfectas se usa un desfase εT<sub>b</sub>, que coincide con el primer instante de muestreo de ambas fórmulas, y se promedian los 4 patrones (m<sub>k</sub>, m<sub>k+1</sub>):</p>
+    <div class="f">Pb = ¼ Σ P(error | m_k, m_k+1),   P = Q(|z − V_opt|/σ) con su signo</div></div>
+  </div>`;
+}
+
+/* =====================================================================
+   Interfaz guiada
+   ===================================================================== */
+S.mod = store.get('mod', 'bpsk');
+S.step = 'entrada';
+const STEPS = {
+  entrada: ['Paso 1 · Señal de entrada', 'Es la señal que sale del modulador binario y llega al demodulador: s_m(t − kTb). La zona gris son los bits que siguen en el flujo; hacen falta porque con sincronismo imperfecto los últimos muestreos caen después del bit 10.'],
+  filtro: ['Paso 2 · Filtro óptimo', ''],
+  muestreo: ['Paso 3 · Muestreo (S/H) y comparador, sin ruido', 'El S/H toma una muestra de la salida del filtro en cada t_k y la mantiene durante Tb. El comparador decide 1 si la muestra supera V_opt y 0 si no. Azul: reloj de bit perfecto. Naranja: reloj desfasado.'],
+  ruido: ['Paso 4 · Con ruido gaussiano', 'A cada muestra se le suma ruido n con la varianza de la tabla del curso, σ² = Ac²/(2γb): y = z_m + n. Cuanto mayor es γb, menor es el ruido y menos errores hay.'],
+  tabla: ['Tabla de muestras', 'Valores numéricos que entrega el S/H en cada bit, con y sin ruido. En rojo, las decisiones erróneas.'],
+  pb: ['Curvas de probabilidad de error P_b', 'Líneas: teoría. Marcadores: simulación de Monte Carlo con 40 000 bits por punto. La franja sombreada es el rango de γb del Grupo 1. Para sincronismo imperfecto se usa un desfase de εTb.'],
+  teoria: ['Fórmulas del demodulador', 'Expresiones programadas en el simulador, tal como se ven en clase.']
+};
+const FILT_DESC = {
+  mf: 'Filtro adaptado: cada rama convoluciona la señal con h_i(t) = K·s_i(Tb − t). La salida oscila a la frecuencia de portadora y alcanza su pico justo en t_k = (k+1)Tb; por eso un reloj desfasado la muestrea en otra fase.',
+  cor: 'Filtro correlador: cada rama multiplica la señal por la referencia K·s_i(t − kTb) e integra durante un bit, con reset al inicio. Llega al mismo valor que el filtro adaptado en t_k, pero es mucho más tolerante al desfase del reloj.'
+};
+
+/* ---------- panel con nota explicativa ---------- */
+function mk(parent, title, eq, note, h) {
+  const d = document.createElement('div'); d.className = 'pn';
+  d.innerHTML = `<div class="ph"><h3>${title}</h3><span class="eq">${eq || ''}</span></div>${note ? `<p class="note">${note}</p>` : ''}<div class="legend"></div><div class="pl"></div>`;
+  parent.appendChild(d);
+  const p = new Plot(d.querySelector('.pl'), h);
+  const lg = d.querySelector('.legend');
+  return {
+    el: d, plot: p,
+    set(spec) { p.set(spec); lg.innerHTML = spec.series.filter(s => s.label && !s.noLegend).map(s => { const cls = s.marker && s.markersOnly ? (s.marker === 'diamond' ? 'dia' : 'dot') : (s.dash ? 'dash' : ''); const st = cls === 'dot' || cls === 'dia' ? `background:${tok(s.color)}` : `border-color:${tok(s.color)}`; return `<span><i class="${cls}" style="${st}"></i>${s.label}</span>`; }).join(''); },
+    title(t, e, n) { d.querySelector('h3').innerHTML = t; d.querySelector('.eq').innerHTML = e || ''; const pn = d.querySelector('.note'); if (pn && n != null) pn.innerHTML = n; },
+    redraw() { p.draw(); }
+  };
+}
+const $ = id => document.getElementById(id);
+const P = {
+  bits: mk($('st-entrada'), 'Secuencia binaria m<sub>k</sub>', '', '', 110),
+  sig: mk($('st-entrada'), 'Señal de entrada s<sub>m</sub>(t − kT<sub>b</sub>)', '', '', 170),
+  inner: mk($('st-filtro'), '', '', '', 160),
+  zz: mk($('st-filtro'), 'Salida de cada rama: z<sub>m1</sub>(t) y z<sub>m0</sub>(t)', '', 'Cada rama compara la señal con una de las dos señales posibles. La rama que coincide con el bit enviado crece; la otra no.', 160),
+  z: mk($('st-filtro'), 'Salida del filtro z<sub>m</sub>(t) = z<sub>m1</sub>(t) − z<sub>m0</sub>(t)', '● muestra perfecta  ◆ muestra con reloj desfasado', 'Los puntos son los valores que tomará el S/H. Si quedan por encima de la línea V<sub>opt</sub> se decide 1; si quedan por debajo, 0.', 190),
+  sh: mk($('st-muestreo'), 'Salida del S/H', 'z<sub>m</sub>(t<sub>k</sub>) retenida durante T<sub>b</sub>', '', 160),
+  cmp: mk($('st-muestreo'), 'Salida del comparador', 'm̂ = 1 si z<sub>m</sub> > V<sub>opt</sub>', 'La franja gris es la secuencia transmitida, retrasada un bit. Si la salida no coincide con ella, hay error (✕).', 130),
+  y: mk($('st-ruido'), 'Muestras con ruido: y = z<sub>m</sub> + n', 'n ~ N(0, σ²)', 'Los círculos vacíos son las muestras sin ruido; los morados, las muestras después de sumar el ruido.', 180),
+  cmpn: mk($('st-ruido'), 'Salida del comparador con ruido', '✕ = bit erróneo', '', 130)
+};
+
+/* ---------- render de la modulación ---------- */
+const zOf = (rw, f) => f === 'mf' ? { P: rw.zP_mf, I: rw.zI_mf } : { P: rw.zP_cor, I: rw.zI_cor };
+
+function renderMod() {
+  const mod = S.mod, R = simulate(mod), f = S.filt, isMF = f === 'mf';
+  const tE = R.tEnd, xr = [0, tE];
+  const contBand = { x0: NBITS, x1: tE + 1, color: '--band2', label: 'bits siguientes' };
+  const ref = { xstep: 1, xlabel: 't / Tb' };
+  const dec = v => (v > R.Vopt ? 1 : 0);
+  const zP = R.rows.map(r => zOf(r, f).P), zI = R.rows.map(r => zOf(r, f).I);
+  const yP = R.rows.map((r, i) => zP[i] + r.n), yI = R.rows.map((r, i) => zI[i] + r.n);
+  const dP = zP.map(dec), dI = zI.map(dec), dnP = yP.map(dec), dnI = yI.map(dec);
+  const tx = S.bits.slice(0, NBITS);
+  const nErr = d => d.reduce((a, v, i) => a + (v !== tx[i]), 0);
+
+  /* --- resumen de bits --- */
+  const fname = isMF ? 'filtro adaptado' : 'filtro correlador';
+  $('resTitle').textContent = `Resultado · ${R.M.name} con ${fname}`;
+  const row = (lab, sub, d) => { const e = nErr(d); return `<div class="strip"><div class="lab">${lab}<small>${sub}</small></div><div class="cells">${d.map((v, i) => `<span class="cell ${v === tx[i] ? 'ok' : 'bad'}" title="k=${i}">${v}</span>`).join('')}</div><span class="count ${e ? 'bad' : 'ok'}">${e ? e + (e === 1 ? ' error' : ' errores') : 'sin errores'}</span></div>`; };
+  $('strips').innerHTML =
+    `<div class="strip"><div class="lab">Bits transmitidos<small>m<sub>k</sub>, k = 0…9</small></div><div class="cells">${tx.map((v, i) => `<button type="button" class="cell ${v ? 'one' : ''}" data-i="${i}" aria-label="Cambiar bit ${i}">${v}</button>`).join('')}</div><span></span></div><div class="sep"></div>` +
+    row('Sin ruido', 'reloj perfecto', dP) + row('Sin ruido', `reloj desfasado ε = ${S.eps} %`, dI) +
+    row('Con ruido', `reloj perfecto · γb = ${S.gam} dB`, dnP) + row('Con ruido', `reloj desfasado · γb = ${S.gam} dB`, dnI);
+  document.querySelectorAll('#strips button.cell').forEach(b => b.onclick = () => { S.bits[+b.dataset.i] ^= 1; refresh(); });
+
+  /* --- datos clave --- */
+  const C = pbCurves(mod, R.eps);
+  const pbP = R.M.pbPerfect(R.gamma), pbI = C.pb(f, R.gamma);
+  const key = (k, v, w) => `<div class="key ${w ? 'wide' : ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  $('keySub').textContent = `${R.M.name} · γb = ${S.gam} dB = ${fmt(R.gamma, 2)}`;
+  $('keys').innerHTML = key('Muestras ideales z₁ / z₀', fmt(R.z1, 3) + ' / ' + fmt(R.z0, 3) + ' V') + key('Umbral V_opt', fmt(R.Vopt, 3) + ' V') +
+    key('Ruido σ', R.sigma.toFixed(4) + ' V') + key('Constante K', fmt(R.M.K, 4)) +
+    key('Pb reloj perfecto · ' + R.M.pbExpr, pbP.toExponential(2), true) + key(`Pb reloj desfasado · ε = ${S.eps} %`, pbI.toExponential(2), true);
+
+  /* --- paso 1 --- */
+  const bw = bitWave(S.bits);
+  P.bits.set({ ...ref, xlabel: '', x: xr, y: [-0.3, 1.5], ystep: 1, bands: [contBand], series: [{ ...bw, color: '--c-sig', width: 2.2, label: 'm_k' }],
+    texts: S.bits.map((b, i) => ({ x: i + 0.5, y: 1.27, text: String(b), color: i < NBITS ? '--ink' : '--muted', size: 12 })).filter(t => t.x < tE) });
+  P.sig.title('Señal de entrada s<sub>m</sub>(t − kT<sub>b</sub>)', mod === 'bpsk' ? 's1(t) = Ac·cos(ωc t),  s0(t) = −s1(t)' : 's1,0(t) = Ac·cos[2π(fc ± fb/2)t]');
+  P.sig.set({ ...ref, x: xr, bands: [contBand], vlines: Array.from({ length: Math.floor(tE) }, (_, i) => ({ x: i + 1 })), series: [{ ...sampleArr(R.r, 0, tE), color: '--c-sig', width: 1.4, label: 's_m(t−kTb)' }] });
+
+  /* --- paso 2 --- */
+  if (isMF) {
+    P.inner.title('Respuestas al impulso del filtro adaptado', 'h<sub>1</sub>(t) = K·s<sub>1</sub>(T<sub>b</sub> − t),  h<sub>0</sub>(t) = K·s<sub>0</sub>(T<sub>b</sub> − t)');
+    const x = Array.from({ length: NS + 1 }, (_, j) => j / NS);
+    P.inner.set({ x: [0, 1], xstep: 0.1, xlabel: 't / Tb', series: [{ x, y: Array.from(R.h1), color: '--c-perf', label: 'h1(t)', width: 1.6 }, { x, y: Array.from(R.h0), color: '--c-alt', label: 'h0(t)', width: 1.6, dash: [5, 3] }] });
+    P.zz.set({ ...ref, x: xr, bands: [contBand], series: [{ ...sampleArr(R.mf1, 0, tE), color: '--c-perf', label: 'zm1(t)', width: 1.2 }, { ...sampleArr(R.mf0, 0, tE), color: '--c-alt', label: 'zm0(t)', width: 1.2 }] });
+  } else {
+    P.inner.title('Multiplicación por la señal de referencia', 's<sub>m</sub>·K·s<sub>1</sub>(t − kT<sub>b</sub>)  y  s<sub>m</sub>·K·s<sub>0</sub>(t − kT<sub>b</sub>)');
+    P.inner.set({ ...ref, x: xr, bands: [contBand], series: [{ ...sampleArr(R.prod1, 0, tE), color: '--c-perf', label: '× K·s1', width: 1.1 }, { ...sampleArr(R.prod0, 0, tE), color: '--c-alt', label: '× K·s0', width: 1.1, alpha: .85 }] });
+    P.zz.set({ ...ref, x: xr, bands: [contBand], series: [{ x: R.cor.x, y: R.cor.z1, color: '--c-perf', label: 'zm1(t)', width: 1.7 }, { x: R.cor.x, y: R.cor.z0, color: '--c-alt', label: 'zm0(t)', width: 1.7 }] });
+  }
+  const tP = R.rows.map(r => r.tp), tI = R.rows.map(r => r.ti);
+  const zSeries = isMF ? [{ ...sampleArr(R.mf, 0, tE), color: '--c-sig', label: 'zm(t)', width: 1.3 }]
+    : [{ x: R.cor.x, y: R.cor.z, color: '--c-sig', label: 'zm(t) reloj perfecto', width: 1.7 }, { x: R.corI.x, y: R.corI.z, color: '--c-imp', label: 'zm(t) reloj desfasado', width: 1.3, dash: [5, 3] }];
+  P.z.set({ ...ref, x: xr, bands: [contBand], hlines: [{ y: R.Vopt, label: 'V_opt = ' + fmt(R.Vopt), color: '--c-ref' }],
+    series: [...zSeries, { x: tP, y: zP, marker: 'circle', markersOnly: true, color: '--c-perf', label: 'muestra perfecta', msize: 4.5 }, { x: tI, y: zI, marker: 'diamond', markersOnly: true, color: '--c-imp', label: 'muestra con reloj desfasado', msize: 4.5 }] });
+
+  /* --- paso 3 --- */
+  P.sh.set({ ...ref, x: xr, bands: [contBand], hlines: [{ y: R.Vopt, color: '--c-ref' }], series: [{ ...stairs(tP, zP, tE), color: '--c-perf', label: 'reloj perfecto', width: 2.2 }, { ...stairs(tI, zI, tE), color: '--c-imp', label: 'reloj desfasado', width: 2.2, dash: [6, 3] }] });
+  const refBits = bitWave(tx, 1);
+  const errMarks = (ts, ds) => { const x = [], y = []; ds.forEach((d, i) => { if (d !== tx[i]) { x.push(ts[i] + 0.5 * (i + 1 < ts.length ? ts[i + 1] - ts[i] : 1)); y.push(d); } }); return { x, y }; };
+  const cmpSpec = (a, b) => ({ ...ref, x: xr, y: [-0.25, 1.35], ystep: 1, bands: [contBand], series: [
+    { ...refBits, color: '--c-ref', label: 'transmitido (retrasado Tb)', width: 6, alpha: .28 },
+    { ...stairs(tP, a, tE), color: '--c-perf', label: 'reloj perfecto', width: 2.2 },
+    { ...stairs(tI, b.map(v => v * 0.92 + 0.04), tE), color: '--c-imp', label: 'reloj desfasado', width: 2.2, dash: [6, 3], noTip: true },
+    { ...errMarks(tI, b), marker: 'x', markersOnly: true, color: '--c-err', label: 'error', msize: 5.5 },
+    { ...errMarks(tP, a), marker: 'x', markersOnly: true, color: '--c-err', msize: 5.5, noLegend: true }] });
+  P.cmp.set(cmpSpec(dP, dI));
+
+  /* --- paso 4 --- */
+  P.y.title('Muestras con ruido: y = z<sub>m</sub> + n', `n ~ N(0, σ²),  σ = ${R.sigma.toFixed(4)} V`);
+  P.y.set({ ...ref, x: xr, bands: [contBand], hlines: [{ y: R.Vopt, label: 'V_opt', color: '--c-ref' }], series: [
+    { ...stairs(tP, yP, tE), color: '--c-perf', label: 'y reloj perfecto', width: 2.2 },
+    { ...stairs(tI, yI, tE), color: '--c-imp', label: 'y reloj desfasado', width: 2.2, dash: [6, 3] },
+    { x: tP, y: zP, marker: 'ring', markersOnly: true, color: '--c-ref', label: 'sin ruido', msize: 3.8 },
+    { x: tP, y: yP, marker: 'circle', markersOnly: true, color: '--c-noise', label: 'con ruido', msize: 3.8 },
+    { x: tI, y: yI, marker: 'diamond', markersOnly: true, color: '--c-imp', msize: 3.8, noLegend: true, label: 'y desfasado' }] });
+  P.cmpn.set(cmpSpec(dnP, dnI));
+
+  /* --- tabla --- */
+  const c = (v, b) => `<td class="${b ? 'bad' : ''}">${v}</td>`;
+  let h = `<thead><tr class="grpH"><th></th><th></th><th colspan="2">Reloj perfecto</th><th colspan="3">Reloj desfasado</th><th></th><th colspan="2">Ruido · perfecto</th><th colspan="2">Ruido · desfasado</th></tr>
+  <tr><th>k</th><th>m<sub>k</sub></th><th>z<sub>m</sub></th><th>m̂</th><th>t<sub>k</sub> / T<sub>b</sub></th><th>z<sub>m</sub></th><th>m̂</th><th>n<sub>k</sub></th><th>y</th><th>m̂</th><th>y</th><th>m̂</th></tr></thead><tbody>`;
+  R.rows.forEach((rw, i) => { h += `<tr><td>${i}</td><td>${rw.m}</td><td>${zP[i].toFixed(4)}</td>${c(dP[i], dP[i] !== rw.m)}<td>${rw.ti.toFixed(3)}</td><td>${zI[i].toFixed(4)}</td>${c(dI[i], dI[i] !== rw.m)}<td>${rw.n.toFixed(4)}</td><td>${yP[i].toFixed(4)}</td>${c(dnP[i], dnP[i] !== rw.m)}<td>${yI[i].toFixed(4)}</td>${c(dnI[i], dnI[i] !== rw.m)}</tr>`; });
+  $('tbl').innerHTML = h + `</tbody><caption style="caption-side:bottom;text-align:left;padding:8px 10px;font-family:var(--f-body);font-size:12px;color:var(--muted)">${R.M.name} con ${fname} · V<sub>opt</sub> = ${fmt(R.Vopt)} V · σ = ${R.sigma.toFixed(4)} V</caption>`;
+}
+
+/* ---------- curvas Pb ---------- */
+let PB = null;
+function renderPb() {
+  if (!PB) { const host = $('pbPlots'); PB = { bpsk: mk(host, 'BPSK', 'P<sub>b</sub> = Q(√(2γ<sub>b</sub>))', '', 340), fsk: mk(host, 'FSK de Sunde', 'P<sub>b</sub> = Q(√γ<sub>b</sub>)', '', 340) }; }
+  const eps = S.eps / 100, gdb = []; for (let v = 0; v <= 20.001; v += 0.25) gdb.push(v);
+  const gmc = []; for (let v = 1; v <= 18; v += 1) gmc.push(v);
+  const rowsT = [];
+  ['bpsk', 'fsk'].forEach(mod => {
+    const C = pbCurves(mod, eps);
+    PB[mod].set({ x: [0, 20], xstep: 2, log: true, y: [Math.pow(10, S.ymin), 1], xlabel: 'γb (dB)', ylabel: 'Pb', xname: 'γb', xunit: ' dB',
+      bands: [{ x0: G1.gam[0], x1: G1.gam[1], color: '--band', label: 'Grupo 1' }], vlines: [{ x: S.gam, color: '--accent', dash: [4, 3] }],
+      series: [
+        { x: gdb, y: gdb.map(d => C.M.pbPerfect(Math.pow(10, d / 10))), color: '--c-perf', label: 'reloj perfecto', width: 2.4 },
+        { x: gdb, y: gdb.map(d => C.pb('cor', Math.pow(10, d / 10))), color: '--c-imp', label: `desfasado · correlador (ε=${S.eps}%)`, width: 2.2, dash: [7, 4] },
+        { x: gdb, y: gdb.map(d => C.pb('mf', Math.pow(10, d / 10))), color: '--c-alt', label: `desfasado · adaptado (ε=${S.eps}%)`, width: 2.2, dash: [2, 3] },
+        { x: gmc, y: gmc.map((d, i) => monteCarlo(C, 'perf', d, 40000, 101 + i)), color: '--c-perf', marker: 'ring', markersOnly: true, label: 'simulado', msize: 3.6 },
+        { x: gmc, y: gmc.map((d, i) => monteCarlo(C, 'cor', d, 40000, 701 + i)), color: '--c-imp', marker: 'diamond', markersOnly: true, noLegend: true, label: 'simulado correlador', msize: 3.6 },
+        { x: gmc, y: gmc.map((d, i) => monteCarlo(C, 'mf', d, 40000, 1301 + i)), color: '--c-alt', marker: 'square', markersOnly: true, noLegend: true, label: 'simulado adaptado', msize: 3 }] });
+    const g = Math.pow(10, S.gam / 10), at = e => pbCurves(mod, e / 100);
+    rowsT.push({ mod: C.M.name, perf: C.M.pbPerfect(g), c7: at(7).pb('cor', g), c: C.pb('cor', g), c12: at(12).pb('cor', g), m7: at(7).pb('mf', g), m: C.pb('mf', g), m12: at(12).pb('mf', g) });
+  });
+  const e = v => v.toExponential(2);
+  let h = `<thead><tr class="grpH"><th></th><th></th><th colspan="3">Reloj desfasado · correlador</th><th colspan="3">Reloj desfasado · filtro adaptado</th></tr><tr><th>γ<sub>b</sub> = ${S.gam} dB</th><th>Reloj perfecto</th><th>ε = 7 %</th><th>ε = ${S.eps} %</th><th>ε = 12 %</th><th>ε = 7 %</th><th>ε = ${S.eps} %</th><th>ε = 12 %</th></tr></thead><tbody>`;
+  rowsT.forEach(r => { h += `<tr><td style="text-align:left;font-family:var(--f-body);font-weight:600">${r.mod}</td><td>${e(r.perf)}</td><td>${e(r.c7)}</td><td>${e(r.c)}</td><td>${e(r.c12)}</td><td>${e(r.m7)}</td><td>${e(r.m)}</td><td>${e(r.m12)}</td></tr>`; });
+  $('pbTable').innerHTML = h + '</tbody>';
+}
+
+/* ---------- navegación por pasos ---------- */
+function showStep(step) {
+  S.step = step;
+  document.querySelectorAll('.step').forEach(b => b.setAttribute('aria-selected', String(b.dataset.step === step)));
+  document.querySelectorAll('.st').forEach(el => el.hidden = el.id !== 'st-' + step);
+  $('stTitle').innerHTML = STEPS[step][0].replace('P_b', 'P<sub>b</sub>');
+  $('stDesc').innerHTML = step === 'filtro' ? FILT_DESC[S.filt] : STEPS[step][1];
+  if (step === 'teoria') renderTheory();
+  if (step === 'pb') renderPb();
+  Object.values(P).forEach(p => p.redraw()); if (PB) Object.values(PB).forEach(p => p.redraw());
+  try { history.replaceState(null, '', '#' + step); } catch (e) {}
+}
+document.querySelectorAll('.step').forEach(b => b.onclick = () => showStep(b.dataset.step));
+
+/* ---------- controles ---------- */
+function setSeg(id, v) { document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(v)))); }
+function syncLabels() {
+  $('epsOut').textContent = S.eps + ' %'; $('gamOut').textContent = S.gam + ' dB';
+  $('eps').value = S.eps; $('gam').value = S.gam;
+  document.querySelectorAll('#epsPre .pre').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === S.eps)));
+  document.querySelectorAll('#gamPre .pre').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === S.gam)));
+  $('epsWarn').hidden = S.eps >= G1.eps[0] && S.eps <= G1.eps[1];
+  $('gamWarn').hidden = S.gam >= G1.gam[0] && S.gam <= G1.gam[1];
+  $('seeds').textContent = `Semillas: bits ${S.bitSeed} · ruido ${S.noiseSeed}`;
+  setSeg('modSeg', S.mod); setSeg('filtSeg', S.filt);
+  if (S.step === 'filtro') $('stDesc').innerHTML = FILT_DESC[S.filt];
+}
+let raf = 0, pbTimer = 0;
+function refresh() {
+  syncLabels(); cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(() => { renderMod(); if (S.step === 'pb') { clearTimeout(pbTimer); pbTimer = setTimeout(renderPb, 120); } });
+}
+$('eps').oninput = e => { S.eps = +e.target.value; refresh(); };
+$('gam').oninput = e => { S.gam = +e.target.value; refresh(); };
+document.querySelectorAll('#epsPre .pre').forEach(b => b.onclick = () => { S.eps = +b.dataset.v; refresh(); });
+document.querySelectorAll('#gamPre .pre').forEach(b => b.onclick = () => { S.gam = +b.dataset.v; refresh(); });
+document.querySelectorAll('#modSeg button').forEach(b => b.onclick = () => { S.mod = b.dataset.v; store.set('mod', S.mod); refresh(); });
+document.querySelectorAll('#filtSeg button').forEach(b => b.onclick = () => { S.filt = b.dataset.v; store.set('filt', S.filt); refresh(); });
+document.querySelectorAll('input[name=model]').forEach(i => i.onchange = () => { S.model = i.value; refresh(); });
+$('ac').onchange = e => { S.Ac = Math.min(10, Math.max(0.1, +e.target.value || 1)); e.target.value = S.Ac; refresh(); };
+$('nc').onchange = e => { S.Nc = Math.min(12, Math.max(1, Math.round(+e.target.value) || 3)); e.target.value = S.Nc; refresh(); };
+$('newBits').onclick = () => { S.bitSeed = Math.floor(Math.random() * 1e6); makeBits(); refresh(); };
+$('newNoise').onclick = () => { S.noiseSeed = Math.floor(Math.random() * 1e6); refresh(); };
+document.querySelectorAll('#st-pb .pre').forEach(b => b.onclick = () => { S.ymin = +b.dataset.y; document.querySelectorAll('#st-pb .pre').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderPb(); });
+
+const redrawAll = () => { Object.values(P).forEach(p => p.redraw()); if (PB) Object.values(PB).forEach(p => p.redraw()); };
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { refresh(); redrawAll(); }); } catch (e) {}
+new MutationObserver(() => { refresh(); redrawAll(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+makeBits();
+const h0 = (location.hash || '').slice(1);
+showStep(STEPS[h0] ? h0 : 'entrada');
+refresh();
+</script>
+
+</body>
+</html>
